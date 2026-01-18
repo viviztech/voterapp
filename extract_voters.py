@@ -1,4 +1,3 @@
-```python
 import fitz  # PyMuPDF
 import ollama
 import io
