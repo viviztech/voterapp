@@ -1,4 +1,32 @@
-# Project Plan: Voter List OCR & Analysis
+# Voter Roll Analytics & Extraction App
+
+## 🚀 Quick Start (Production)
+
+This application is containerized and ready for deployment using Docker Compose.
+
+### Prerequisites
+- Docker & Docker Compose installed
+- 8GB+ RAM (for running AI models)
+
+### How to Run
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/viviztech/voterapp.git
+   cd voterapp
+   ```
+
+2. **Start the application**:
+   ```bash
+   docker-compose up -d
+   ```
+   *Note: On the first run, the AI model (`llama3.2:3b`) will be downloaded automatically by Ollama, which may take a few minutes.*
+
+3. **Access the App**:
+   Open [http://localhost:8501](http://localhost:8501) in your browser.
+
+---
+
+# Original Project Plan: Voter List OCR & Analysis
 
 ## 1. Project Overview
 **Objective**: Extract voter information (Assembly Booth wise) from the PDF `2026-EROLLGEN-S22-133-SIR-DraftRoll-Revision1-TAM-13-WI.pdf` using the local AI OCR tool (`local_ai_ocr` / DeepSeek-OCR).
