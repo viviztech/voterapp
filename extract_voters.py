@@ -14,6 +14,10 @@ PDF_PATH = '2026-EROLLGEN-S22-133-SIR-DraftRoll-Revision1-TAM-13-WI.pdf'
 DB_PATH = 'voter_data.db'
 MODEL_NAME = 'llama3.2:3b'  # Text model for parsing Tesseract output
 
+# Configure Ollama Host (Defaults to localhost, but can be set in Streamlit Secrets/Env)
+OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
+client = ollama.Client(host=OLLAMA_HOST)
+
 
 def log_status(page_num, status, message=""):
     conn = sqlite3.connect(DB_PATH)
@@ -68,7 +72,7 @@ def extract_text_from_image(image_bytes):
     """ 
     # Truncate text to fit context window if needed, though 4k is usually safe for lazy loading
 
-    response = ollama.chat(
+    response = client.chat(
         model=MODEL_NAME,
         messages=[{'role': 'user', 'content': prompt}],
         options={'temperature': 0} # Deterministic output
@@ -143,11 +147,11 @@ def process_document(file_path, progress_callback=None):
 
     # Check if text model exists
     try:
-        models_info = ollama.list()
+        models_info = client.list()
         model_names = [m['name'] for m in models_info['models']]
         if MODEL_NAME not in model_names and f"{MODEL_NAME}:latest" not in model_names:
              yield f"⚠️ Model '{MODEL_NAME}' not found. Downloading..."
-             ollama.pull(MODEL_NAME)
+             client.pull(MODEL_NAME)
     except Exception as e:
         yield f"Warning: Could not verify models: {e}. Attempting to proceed..."
     
