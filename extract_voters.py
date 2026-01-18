@@ -1,5 +1,5 @@
+```python
 import fitz  # PyMuPDF
-import sqlite3
 import ollama
 import io
 from PIL import Image
@@ -8,10 +8,11 @@ import re
 import time
 import os
 import pytesseract
+from database import run_query
 
 # Configuration
 PDF_PATH = '2026-EROLLGEN-S22-133-SIR-DraftRoll-Revision1-TAM-13-WI.pdf'
-DB_PATH = 'voter_data.db'
+# DB_PATH is now handled by database.py
 MODEL_NAME = 'llama3.2:3b'  # Text model for parsing Tesseract output
 
 # Configure Ollama Host (Defaults to localhost, but can be set in Streamlit Secrets/Env)
@@ -20,12 +21,10 @@ client = ollama.Client(host=OLLAMA_HOST)
 
 
 def log_status(page_num, status, message=""):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO extraction_logs (page_number, status, error_message) VALUES (?, ?, ?)",
-              (page_num, status, message))
-    conn.commit()
-    conn.close()
+    run_query(
+        "INSERT INTO extraction_logs (page_number, status, error_message) VALUES (:p, :s, :e)",
+        {"p": page_num, "s": status, "e": message}
+    )
 
 def extract_text_from_image(image_bytes):
     """
@@ -80,9 +79,6 @@ def extract_text_from_image(image_bytes):
     return response['message']['content']
 
 def parse_and_store(page_num, raw_response, booth_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
     try:
         # robust json extraction
         json_match = re.search(r'\{.*\}|\[.*\]', raw_response.replace('\n', ' '), re.DOTALL)
@@ -104,26 +100,25 @@ def parse_and_store(page_num, raw_response, booth_id):
         
         for v in voters:
             try:
-                c.execute('''
-                    INSERT OR IGNORE INTO voters 
+                # NOTE: SQLAlchemy uses :name for parameters
+                run_query('''
+                    INSERT INTO voters 
                     (epic_number, name, relation_type, relation_name, house_number, age, gender, polling_station_id, raw_text)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    v.get('epic_number'),
-                    v.get('name'),
-                    v.get('relation_type'),
-                    v.get('relation_name'),
-                    v.get('house_number'),
-                    int(v.get('age', 0)) if v.get('age') else 0,
-                    v.get('gender'),
-                    booth_id,
-                    json.dumps(v)
-                ))
+                    VALUES (:epic, :name, :rel_type, :rel_name, :house, :age, :gender, :booth, :raw)
+                ''', {
+                    "epic": v.get('epic_number'),
+                    "name": v.get('name'),
+                    "rel_type": v.get('relation_type'),
+                    "rel_name": v.get('relation_name'),
+                    "house": v.get('house_number'),
+                    "age": int(v.get('age', 0)) if v.get('age') else 0,
+                    "gender": v.get('gender'),
+                    "booth": booth_id,
+                    "raw": json.dumps(v)
+                })
             except Exception as e:
                 # print(f"Error inserting voter: {e}")
                 pass
-        
-        conn.commit()
         
     except json.JSONDecodeError:
         print(f"Page {page_num}: Failed to parse JSON.")
@@ -134,8 +129,6 @@ def parse_and_store(page_num, raw_response, booth_id):
     except Exception as e:
         print(f"Page {page_num}: Error: {e}")
         log_status(page_num, "FAILED", str(e))
-    finally:
-        conn.close()
 
 def process_document(file_path, progress_callback=None):
     """
@@ -157,10 +150,16 @@ def process_document(file_path, progress_callback=None):
     
     # Initialize DB (Booth info)
     current_booth_id = 1 
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("INSERT OR IGNORE INTO polling_stations (id, booth_no, location_name) VALUES (1, 'Unknown', 'Default')")
-    conn.commit()
-    conn.close()
+    # Use generic SQL compatible with both SQLite and Postgres
+    # Use INSERT INTO ... (columns) VALUES ... 
+    # ON CONFLICT behavior is tricky across DBs (IGNORE vs DO NOTHING). 
+    # For now, just try insert, ignore error if duplicate ID (though generic default is often 1)
+    try:
+        run_query("INSERT INTO polling_stations (booth_no, location_name) VALUES (:booth_no, :location_name)",
+                  {"booth_no": 'Unknown', "location_name": 'Default'})
+    except Exception as e:
+        # print(f"Polling station insert failed (likely exists): {e}")
+        pass # Likely already exists
 
     # Detect File Type
     ext = os.path.splitext(file_path)[1].lower()

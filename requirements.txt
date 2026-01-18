@@ -5,3 +5,5 @@ pymupdf
 pillow
 ollama
 pytesseract
+psycopg2-binary
+sqlalchemy
