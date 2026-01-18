@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+voter_data.db
+uploads/
+local_ai_ocr/
+failed_page_*.txt
+.DS_Store
+*.pdf
